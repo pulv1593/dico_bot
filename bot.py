@@ -4,10 +4,11 @@ import asyncio
 from discord.ext import commands
 from dico_token import Token
  
-# 수정. 2024.02.22
+# bot intents 정의
 intents = discord.Intents.default()
 intents.message_content = True
- 
+
+# bot 기본 세팅, 명령어 앞에 !로 시작하게 설정.
 bot = commands.Bot(
     command_prefix=commands.when_mentioned_or("!"),
     description='디스코드 입장을 위한 테스트 코드',
@@ -18,7 +19,7 @@ bot = commands.Bot(
 async def on_ready():
     print('{0.user} 봇을 실행합니다.'.format(bot))
  
-# 2024 08 24 수정
+# 노래봇을 음성채팅에 데려오는 명령어
 @bot.command(aliases=['입장'])
 async def join(ctx):
     embed = discord.Embed(title = "디스코드 봇 도우미(개발용)", description = "음성 채널 개발용 디스코드 봇",color=0x00ff56)
@@ -37,7 +38,8 @@ async def join(ctx):
         return await ctx.voice_client.move_to(channel)
         
     await channel.connect()
-    
+
+#노래봇을 음성채널에서 내보내는 명령어 
 @bot.command(aliases=['나가기'])
 async def out(ctx):
     try:
@@ -56,6 +58,7 @@ async def out(ctx):
         embed.add_field(name=":x:",value="봇이 존재하는 채널을 찾는 데 실패했습니다.")
         await ctx.send(embed=embed)
 
+#url, 키워드로 검색하여 노래를 재생하는 명령어.
 @bot.command(aliases=['재생'])
 async def play(ctx, *, search: str):
     if ctx.author.voice is None:
@@ -101,6 +104,7 @@ async def play(ctx, *, search: str):
         await ctx.send("음악을 재생할 수 없습니다. 링크 또는 키워드를 확인해주세요.")
         print(f"에러 발생: {e}")
 
+#노래 재생을 끝내고 내보내기
 @bot.command(aliases=['멈춤', '정지'])
 async def stop(ctx):
     if ctx.voice_client is None:
