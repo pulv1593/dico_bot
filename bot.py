@@ -1,10 +1,14 @@
 import discord
+import os
 import re
 import yt_dlp as youtube_dl
 import asyncio
 from discord.ext import commands
-from dico_token import Token
+#from dico_token import Token #로컬 기능 테스트 시 사용.
 from collections import defaultdict, deque
+
+#배포환경에서 사용되는 봇 토큰
+TOKEN = os.getenv("DISCORD_TOKEN")
  
 # bot intents 정의
 intents = discord.Intents.default()
@@ -251,5 +255,39 @@ async def queue(ctx):
         embed.add_field(name=f"{i+1}. {song['title']}", value="\u200b", inline=False)
 
     await ctx.send(embed=embed)
+
+# 재생중인 노래 스킵 명령어
+@bot.command(aliases=['스킵'])
+async def skip(ctx):
+    if ctx.voice_client is None:
+        embed = discord.Embed(color=0xf66c24)
+        embed.add_field(name=":x:", value="봇이 음성 채널에 연결되어 있지 않습니다.")
+        await ctx.send(embed=embed)
+        return
+
+    if not ctx.voice_client.is_playing():
+        embed = discord.Embed(color=0xf66c24)
+        embed.add_field(name=":x:", value="현재 재생 중인 음악이 없습니다.")
+        await ctx.send(embed=embed)
+        return
     
-bot.run(Token)
+    # 대기열에 다음 곡이 있는지 확인
+    if len(queues[ctx.guild.id]) == 0:
+        embed = discord.Embed(color=0xf66c24)
+        embed.add_field(name=":x:", value="대기열에 다음 곡이 없습니다.")
+        await ctx.send(embed=embed)
+        return
+
+    # 현재 곡을 멈추고 다음 곡 재생
+    ctx.voice_client.stop()
+    embed = discord.Embed(color=0x1DB954)
+    embed.add_field(name=":fast_forward:", value="현재 곡을 스킵하고 다음 곡을 재생합니다.", inline=False)
+    await ctx.send(embed=embed)
+
+    # 약간의 지연 후 다음 곡 재생
+    await asyncio.sleep(1)  # 1초 지연을 추가
+    if not ctx.voice_client.is_playing():  # 중복 재생 방지
+        await play_next_song(ctx)
+    
+#bot.run(Token) #local에서 테스트 할때 쓰는 토큰
+bot.run(TOKEN) #배포시 사용될 봇 토큰
