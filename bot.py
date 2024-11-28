@@ -16,7 +16,7 @@ intents.message_content = True
 
 # bot 기본 세팅, 명령어 앞에 !로 시작하게 설정.
 bot = commands.Bot(
-    command_prefix=commands.when_mentioned_or("!"),
+    command_prefix=commands.when_mentioned_or("/"),
     description='디스코드 입장을 위한 테스트 코드',
     intents=intents,
 )
