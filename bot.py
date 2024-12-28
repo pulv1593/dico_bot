@@ -23,6 +23,8 @@ bot = commands.Bot(
 
 # 서버별 대기열 저장
 queues = defaultdict(deque)
+# 명령어 실행 상태를 저장할 플래그
+command_in_progress = {}
 
 #봇 이벤트 처리 함수 모음 
 @bot.event
@@ -120,12 +122,28 @@ async def play_next_song(ctx):
             after=lambda e: asyncio.run_coroutine_threadsafe(play_next_song(ctx), bot.loop).result()
         )
     else:
-        # 대기열이 비었으면 멈추기
-        await ctx.voice_client.disconnect()
+        # 대기열이 비었을 때 대기 상태로 전환
+        embed = discord.Embed(title=":zzz: 대기열이 비었습니다", description="새 노래를 추가하지 않으면 5분 후에 음성 채널에서 나갑니다.", color=0xFFA500)
+        await ctx.send(embed=embed)
+
+        # 5분 대기 후 음성 채널에서 나가기
+        await asyncio.sleep(300)  # 300초 = 5분
+        if not ctx.voice_client.is_playing() and len(queues[ctx.guild.id]) == 0:
+            await ctx.voice_client.disconnect()
 
 # 노래 재생 명령어
 @bot.command(aliases=['재생'])
-async def play(ctx, *, search: str):
+async def p(ctx, *, search: str):
+    global command_in_progress
+    
+    # 현재 서버에서 명령어가 실행 중인지 확인
+    if command_in_progress.get(ctx.guild.id, False):
+        await ctx.send("이미 노래를 검색 중입니다. 검색이 완료된 후 다시 시도해주세요.")
+        return
+    
+    # 플래그 설정: 명령어 실행 중
+    command_in_progress[ctx.guild.id] = True
+    
     if ctx.author.voice is None:
         await ctx.send("음성 채널에 입장한 후 명령어를 사용해주세요.")
         return
@@ -174,7 +192,7 @@ async def play(ctx, *, search: str):
             return
 
         # 검색결과를 discord 메세지로 출력
-        embed = discord.Embed(title="검색 결과", description="원하는 곡 번호를 입력해주세요!", color=0x1DB954)
+        embed = discord.Embed(title="검색 결과", description="원하는 곡 번호를 입력해주세요!\n '0'을 입력하면 취소됩니다.", color=0x1DB954)
         for i, entry in enumerate(entries[:3]):  # 최대 3개 출력
             embed.add_field(
                 name=f"{i+1}. {entry['title']}", 
@@ -187,12 +205,17 @@ async def play(ctx, *, search: str):
 
         # 사용자 입력 대기
         def check(msg):
-            return msg.author == ctx.author and msg.content.isdigit() and 1 <= int(msg.content) <= len(entries[:3])
+            return msg.author == ctx.author and msg.content.isdigit() and 0 <= int(msg.content) <= len(entries[:3])
 
         try:
             msg = await bot.wait_for('message', check=check, timeout=60.0)
-            selection = int(msg.content) - 1
-            selected_entry = entries[selection]
+            selection = int(msg.content)
+
+            if selection == 0:
+                await ctx.send("노래 검색이 취소되었습니다.")
+                return
+            
+            selected_entry = entries[selection - 1]
 
             # 선택된 음원 재생
             url = selected_entry.get('url') or selected_entry.get('webpage_url')
@@ -221,6 +244,9 @@ async def play(ctx, *, search: str):
     except Exception as e:
         await ctx.send("음악을 재생할 수 없습니다. 링크 또는 키워드를 확인해주세요.")
         print(f"에러 발생: {e}")
+    finally:
+        # 플래그 해제: 명령어 종료
+        command_in_progress[ctx.guild.id] = False
 
 #노래 재생을 끝내고 내보내기
 @bot.command(aliases=['멈춤', '정지'])
