@@ -4,11 +4,11 @@ import re
 import yt_dlp as youtube_dl
 import asyncio
 from discord.ext import commands
-from dico_token import Token #로컬 기능 테스트 시 사용.
+#from dico_token import Token #로컬 기능 테스트 시 사용.
 from collections import defaultdict, deque
 
 #배포환경에서 사용되는 봇 토큰
-#TOKEN = os.getenv("DISCORD_TOKEN")
+TOKEN = os.getenv("DISCORD_TOKEN")
  
 # bot intents 정의
 intents = discord.Intents.default()
@@ -318,5 +318,5 @@ async def skip(ctx):
     if not ctx.voice_client.is_playing():  # 중복 재생 방지
         await play_next_song(ctx)
     
-bot.run(Token) #local에서 테스트 할때 쓰는 토큰
-#bot.run(TOKEN) #배포시 사용될 봇 토큰
+#bot.run(Token) #local에서 테스트 할때 쓰는 토큰
+bot.run(TOKEN) #배포시 사용될 봇 토큰
