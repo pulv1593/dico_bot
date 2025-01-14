@@ -142,7 +142,7 @@ async def p(ctx, *, search: str):
         await ctx.invoke(bot.get_command('join'))
 
     #url로 입력한 경우 처리
-    if is_valid_url(search, False):
+    if is_valid_url(search):
         try:
             ytdl_opts = {
             'format': 'bestaudio/best',
