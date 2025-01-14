@@ -137,7 +137,7 @@ async def play_next_song(ctx):
         audio_source = discord.FFmpegOpusAudio(url, **FFMPEG_OPTIONS)
         ctx.voice_client.play(
             audio_source,
-            after=lambda e: asyncio.run_coroutine_threadsafe(play_next_song(ctx), bot.loop).result()
+            after=lambda e: asyncio.create_task(play_next_song(ctx))
         )
     else:
         # 대기열이 비었을 때 대기 상태로 전환
@@ -148,11 +148,6 @@ async def play_next_song(ctx):
         await asyncio.sleep(300)  # 300초 = 5분
         if not ctx.voice_client.is_playing() and len(queues[ctx.guild.id]) == 0:
             await ctx.voice_client.disconnect()
-
-# 5. 재생 상태 점검 함수
-async def ensure_playing(ctx):
-    while ctx.voice_client and ctx.voice_client.is_connected():
-        await asyncio.sleep(1)  # 1초마다 상태를 확인
 
 # 노래 재생 명령어
 @bot.command(aliases=['재생'])
@@ -208,71 +203,70 @@ async def p(ctx, *, search: str):
                 # 플래그 해제: 명령어 종료
                 command_in_progress[ctx.guild.id] = False
                 return
-        else:
-            # 키워드 검색인 경우
-            # "검색 중입니다!" 메시지 보내기
-            loading_message = await ctx.send("🔍 노래를 찾고있어요..! 조금만 기다려주세요...")
+        # 키워드 검색인 경우
+        # "검색 중입니다!" 메시지 보내기
+        loading_message = await ctx.send("🔍 노래를 찾고있어요..! 조금만 기다려주세요...")
+        try:
+            # 노래 검색
+            entries = await search_song(ctx, search)
+            #검색 결과가 없는 경우
+            if not entries:
+                await loading_message.edit(content="검색 결과가 없습니다. 다른 키워드로 시도해주세요.")
+                return
+
+            # 검색결과를 discord 메세지로 출력
+            embed = discord.Embed(title="검색 결과", description="원하는 곡 번호를 입력해주세요!\n '0'을 입력하면 취소됩니다.", color=0x1DB954)
+            for i, entry in enumerate(entries[:3]):  # 최대 3개 출력
+                embed.add_field(
+                    name=f"{i+1}. {entry['title']}", 
+                    value="\u200b",  # 빈 줄 표시
+                    inline=False
+                )
+            # 기존 메시지 수정
+            await loading_message.edit(content=None, embed=embed)
+
+            # 사용자 입력 대기
+            def check(msg):
+                return msg.author == ctx.author and msg.content.isdigit() and 0 <= int(msg.content) <= len(entries[:3])
+        
+            #60초간 사용자 입력 대기
             try:
-                # 노래 검색
-                entries = await search_song(ctx, search)
-                #검색 결과가 없는 경우
-                if not entries:
-                    await loading_message.edit(content="검색 결과가 없습니다. 다른 키워드로 시도해주세요.")
+                msg = await bot.wait_for('message', check=check, timeout=60.0)
+                selection = int(msg.content)
+
+                if selection == 0:
+                    await ctx.send("노래 검색이 취소되었습니다.")
+                    # 플래그 해제: 명령어 종료
+                    command_in_progress[ctx.guild.id] = False
                     return
-
-                # 검색결과를 discord 메세지로 출력
-                embed = discord.Embed(title="검색 결과", description="원하는 곡 번호를 입력해주세요!\n '0'을 입력하면 취소됩니다.", color=0x1DB954)
-                for i, entry in enumerate(entries[:3]):  # 최대 3개 출력
-                    embed.add_field(
-                        name=f"{i+1}. {entry['title']}", 
-                        value="\u200b",  # 빈 줄 표시
-                        inline=False
-                    )
-                # 기존 메시지 수정
-                await loading_message.edit(content=None, embed=embed)
-
-                # 사용자 입력 대기
-                def check(msg):
-                    return msg.author == ctx.author and msg.content.isdigit() and 0 <= int(msg.content) <= len(entries[:3])
             
-                #60초간 사용자 입력 대기
-                try:
-                    msg = await bot.wait_for('message', check=check, timeout=60.0)
-                    selection = int(msg.content)
+                selected_entry = entries[selection - 1]
 
-                    if selection == 0:
-                        await ctx.send("노래 검색이 취소되었습니다.")
-                        # 플래그 해제: 명령어 종료
-                        command_in_progress[ctx.guild.id] = False
-                        return
-                
-                    selected_entry = entries[selection - 1]
+                # 선택된 음원 재생
+                url = selected_entry.get('url') or selected_entry.get('webpage_url')
+                title = selected_entry.get('title', '알 수 없는 제목')
 
-                    # 선택된 음원 재생
-                    url = selected_entry.get('url') or selected_entry.get('webpage_url')
-                    title = selected_entry.get('title', '알 수 없는 제목')
+                # 대기열에 추가
+                add_to_queue(ctx, {'url': url, 'title': title})
 
-                    # 대기열에 추가
-                    add_to_queue(ctx, {'url': url, 'title': title})
+                embed = discord.Embed(title=":musical_note: 대기열에 추가되었습니다!", description=f"**{title}**", color=0x1DB954)
+                await ctx.send(embed=embed)
 
-                    embed = discord.Embed(title=":musical_note: 대기열에 추가되었습니다!", description=f"**{title}**", color=0x1DB954)
-                    await ctx.send(embed=embed)
-
-                    # 오디오 재생
-                    if not ctx.voice_client.is_playing():
-                        await play_next_song(ctx)
-                    else:
-                        # 현재 대기열 출력
-                        embed = discord.Embed(title="현재 대기열", color=0x1DB954)
-                        for i, song in enumerate(queues[ctx.guild.id]):
-                            embed.add_field(name=f"{i+1}. {song['title']}", value="\u200b", inline=False)
-                        await ctx.send(embed=embed)  
-                except asyncio.TimeoutError:
-                    await ctx.send("시간 초과로 명령어가 취소되었습니다.")
-                    return
-            except Exception as e:
-                await ctx.send("검색을 실패했습니다.")
-                print(f"에러 발생: {e}")
+                # 오디오 재생
+                if not ctx.voice_client.is_playing():
+                    await play_next_song(ctx)
+                else:
+                    # 현재 대기열 출력
+                    embed = discord.Embed(title="현재 대기열", color=0x1DB954)
+                    for i, song in enumerate(queues[ctx.guild.id]):
+                        embed.add_field(name=f"{i+1}. {song['title']}", value="\u200b", inline=False)
+                    await ctx.send(embed=embed)  
+            except asyncio.TimeoutError:
+                await ctx.send("시간 초과로 명령어가 취소되었습니다.")
+                return
+        except Exception as e:
+            await ctx.send("검색을 실패했습니다.")
+            print(f"에러 발생: {e}")
     except Exception as e:
             await ctx.send("음악을 재생할 수 없습니다. 링크 또는 키워드를 확인해주세요.")
             print(f"에러 발생: {e}")
