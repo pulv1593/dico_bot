@@ -25,8 +25,6 @@ bot = commands.Bot(
 # 서버별 대기열 저장
 queues = defaultdict(deque)
 
-# 명령어 실행 상태를 저장할 플래그
-command_in_progress = {}
 
 #봇 이벤트 처리 함수 모음 
 @bot.event
@@ -37,11 +35,6 @@ async def on_ready():
 # 노래봇을 음성채팅에 데려오는 명령어
 @bot.command(aliases=['입장'])
 async def join(ctx):
-    if command_in_progress.get(ctx.guild.id, False):  # 기본값 False
-        await ctx.send("이미 노래를 검색 중입니다. 검색이 완료된 후 다시 시도해주세요.")
-        return
-    command_in_progress[ctx.guild.id] = True
-    
     try:
         embed = discord.Embed(title = "디스코드 봇 도우미(개발용)", description = "음성 채널 개발용 디스코드 봇",color=0x00ff56)
         channel = ctx.author.voice.channel
@@ -62,15 +55,10 @@ async def join(ctx):
     except Exception as e:
         await ctx.send(f"에러 발생: {e}")
     finally:
-        command_in_progress[ctx.guild.id] = False
+        pass
 #노래봇을 음성채널에서 내보내는 명령어 
 @bot.command(aliases=['나가기'])
 async def out(ctx):
-    if command_in_progress.get(ctx.guild.id, False):  # 기본값 False
-        await ctx.send("이미 노래를 검색 중입니다. 검색이 완료된 후 다시 시도해주세요.")
-        return
-    command_in_progress[ctx.guild.id] = True
-    
     try:
         embed = discord.Embed(color=0x00ff56)
         embed.add_field(name=":regional_indicator_b::regional_indicator_y::regional_indicator_e:",value=" {0.author.voice.channel}에서 내보냈습니다.".format(ctx),inline=False)
@@ -87,7 +75,7 @@ async def out(ctx):
         embed.add_field(name=":x:",value="봇이 존재하는 채널을 찾는 데 실패했습니다.")
         await ctx.send(embed=embed)
     finally:
-        command_in_progress[ctx.guild.id] = False
+        pass
 
 # /play 명령어 내장 함수 모음
 # 1. URL 유효성 검사 함수
@@ -151,17 +139,7 @@ async def play_next_song(ctx):
 
 # 노래 재생 명령어
 @bot.command(aliases=['재생'])
-async def p(ctx, *, search: str):
-    global command_in_progress
-    
-    # 현재 서버에서 명령어가 실행 중인지 확인
-    if command_in_progress.get(ctx.guild.id, False):
-        await ctx.send("이미 노래를 검색 중입니다. 검색이 완료된 후 다시 시도해주세요.")
-        return
-    
-    # 플래그 설정: 명령어 실행 중
-    command_in_progress[ctx.guild.id] = True
-    
+async def p(ctx, *, search: str):    
     try:
         #활성화된 음성채널에 없을 시
         if ctx.author.voice is None:
@@ -200,8 +178,6 @@ async def p(ctx, *, search: str):
                 await ctx.send("URL에서 음악을 가져올 수 없습니다. 링크를 확인해주세요.")
                 print(f"에러 발생: {e}")
             finally:
-                # 플래그 해제: 명령어 종료
-                command_in_progress[ctx.guild.id] = False
                 return
         # 키워드 검색인 경우
         # "검색 중입니다!" 메시지 보내기
@@ -236,8 +212,6 @@ async def p(ctx, *, search: str):
 
                 if selection == 0:
                     await ctx.send("노래 검색이 취소되었습니다.")
-                    # 플래그 해제: 명령어 종료
-                    command_in_progress[ctx.guild.id] = False
                     return
             
                 selected_entry = entries[selection - 1]
@@ -271,16 +245,11 @@ async def p(ctx, *, search: str):
             await ctx.send("음악을 재생할 수 없습니다. 링크 또는 키워드를 확인해주세요.")
             print(f"에러 발생: {e}")
     finally:
-        # 플래그 해제: 명령어 종료
-        command_in_progress[ctx.guild.id] = False
+        pass
 
 #노래 재생을 끝내고 내보내기
 @bot.command(aliases=['멈춤', '정지'])
 async def stop(ctx):
-    if command_in_progress.get(ctx.guild.id, False):  # 기본값 False
-        await ctx.send("이미 노래를 검색 중입니다. 검색이 완료된 후 다시 시도해주세요.")
-        return
-    command_in_progress[ctx.guild.id] = True
     try:
         if ctx.voice_client is None:
             embed = discord.Embed(color=0xf66c24)
@@ -301,16 +270,12 @@ async def stop(ctx):
     except Exception as e:
         await ctx.send(f"에러 발생: {e}")
     finally:
-        command_in_progress[ctx.guild.id] = False
+        pass
 
 
 # 대기열 확인 명령어
 @bot.command(aliases=['대기열'])
 async def queue(ctx):
-    if command_in_progress.get(ctx.guild.id, False):  # 기본값 False
-        await ctx.send("이미 노래를 검색 중입니다. 검색이 완료된 후 다시 시도해주세요.")
-        return
-    command_in_progress[ctx.guild.id] = True
     try:
         if ctx.guild.id not in queues or len(queues[ctx.guild.id]) == 0:
             await ctx.send("현재 대기열에 노래가 없습니다.")
@@ -324,14 +289,10 @@ async def queue(ctx):
     except Exception as e:
         await ctx.send(f"에러 발생: {e}")
     finally:
-        command_in_progress[ctx.guild.id] = False
+        pass
 # 재생중인 노래 스킵 명령어
 @bot.command(aliases=['스킵'])
 async def skip(ctx):
-    if command_in_progress.get(ctx.guild.id, False):  # 기본값 False
-        await ctx.send("이미 노래를 검색 중입니다. 검색이 완료된 후 다시 시도해주세요.")
-        return
-    command_in_progress[ctx.guild.id] = True
     try:
         if ctx.voice_client is None:
             embed = discord.Embed(color=0xf66c24)
@@ -365,7 +326,7 @@ async def skip(ctx):
     except Exception as e:
         await ctx.send(f"에러 발생: {e}")
     finally:
-        command_in_progress[ctx.guild.id] = False
+        pass
     
 @bot.command(aliases=['다시재생'])
 async def rep(ctx):
