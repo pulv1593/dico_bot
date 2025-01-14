@@ -118,7 +118,7 @@ async def play_next_song(ctx):
         audio_source = discord.FFmpegOpusAudio(url, **FFMPEG_OPTIONS)
         ctx.voice_client.play(
             audio_source,
-            after=lambda e: asyncio.create_task(play_next_song(ctx))
+            after=lambda e: asyncio.run_coroutine_threadsafe(play_next_song(ctx), bot.loop).result()
         )
     else:
         # 대기열이 비었을 때 대기 상태로 전환
